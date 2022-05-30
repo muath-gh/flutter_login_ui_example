@@ -1,9 +1,23 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_login_facebook/flutter_login_facebook.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:login_screen_example/animated_text_field.dart';
+import 'package:http/http.dart' as http;
+import 'package:login_screen_example/home_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import './constants.dart';
 
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+class LoginScreen extends StatefulWidget {
+  LoginScreen({Key? key}) : super(key: key);
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final FacebookLogin _fb = FacebookLogin();
 
   @override
   Widget build(BuildContext context) {
@@ -129,20 +143,63 @@ class LoginScreen extends StatelessWidget {
   }
 
   Widget _buildSocialMediaBtn({required Color color, required IconData icon}) {
-    return Container(
-      width: 80,
-      height: 50,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.blueGrey),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Center(
-        child: FaIcon(
-          icon,
-          color: color,
+    return GestureDetector(
+      onTap: () {
+        _facebookLogin();
+      },
+      child: Container(
+        width: 80,
+        height: 50,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.blueGrey),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: FaIcon(
+            icon,
+            color: color,
+          ),
         ),
       ),
     );
+  }
+
+  void _facebookLogin() async {
+    final result = await _fb.logIn();
+
+    switch (result.status) {
+      case FacebookLoginStatus.success:
+        // print(result.accessToken!.token);
+        sendToken(result.accessToken!.token);
+        break;
+
+      case FacebookLoginStatus.cancel:
+        break;
+
+      case FacebookLoginStatus.error:
+        print(result.error);
+        break;
+    }
+  }
+
+  void sendToken(String facebookToken) async {
+    http.Response response = await http.post(Uri.parse(endpoint + "/api/login"),
+        body: json.encode(
+          {
+            "token": facebookToken,
+          },
+        ),
+        headers: {"Content-Type": "application/json"});
+
+    if (response.statusCode == 200) {
+      SharedPreferences sharedPreferences =
+          await SharedPreferences.getInstance();
+      var body = json.decode(response.body);
+      sharedPreferences.setString('access_token', body['access_token']);
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(context,
+          MaterialPageRoute(builder: (_) => HomeScreen()), (route) => false);
+    }
   }
 }
 
